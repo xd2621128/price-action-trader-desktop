@@ -21,7 +21,7 @@
       <div class="action-buttons">
         <!-- 技术分析模式 -->
         <template v-if="mode === 'analysis'">
-          <a-button v-if="!isRunning" danger @click="handleRun('breakout')">
+          <a-button v-if="!isRunning" danger @click="handleRun({ key: 'breakout' })">
             <template #icon><PlayCircleOutlined /></template>
             开始分析
           </a-button>
@@ -36,7 +36,7 @@
           <template v-if="!isRunning">
             <a-dropdown>
               <template #overlay>
-                <a-menu @click="({ key }:{key: any}) => handleRun(key as 'breakout' | 'retrace')">
+                <a-menu @click="handleRun">
                   <a-menu-item key="breakout">突破买入</a-menu-item>
                   <a-menu-item key="retrace">回调买入</a-menu-item>
                 </a-menu>
@@ -141,7 +141,8 @@ function handleCancelEdit() {
   editModalVisible.value = false
 }
 
-function handleRun(mode: 'breakout' | 'retrace') {
+function handleRun(e: { key: string }) {
+  const mode = e.key as 'breakout' | 'retrace'
   if (props.stockList.length === 0) {
     return
   }

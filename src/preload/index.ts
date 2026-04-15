@@ -9,6 +9,7 @@ export interface ElectronAPI {
   python: {
     runAnalysis: () => Promise<boolean>
     runBacktest: (mode: 'breakout' | 'retrace') => Promise<boolean>
+    runHS300Analysis: () => Promise<boolean>
     stop: () => Promise<boolean>
     onOutput: (callback: (output: PythonOutput) => void) => () => void
     onExit: (callback: (data: { code: number; error?: string }) => void) => () => void
@@ -42,6 +43,7 @@ const electronAPI: ElectronAPI = {
   python: {
     runAnalysis: () => ipcRenderer.invoke('python:run-analysis'),
     runBacktest: (mode) => ipcRenderer.invoke('python:run-backtest', mode),
+    runHS300Analysis: () => ipcRenderer.invoke('python:run-hs300-analysis'),
     stop: () => ipcRenderer.invoke('python:stop'),
     onOutput: (callback) => {
       const handler = (_: IpcRendererEvent, output: PythonOutput) => callback(output)

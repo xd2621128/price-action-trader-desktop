@@ -1,4 +1,4 @@
-export type ViewType = 'analysis' | 'backtest' | 'settings'
+export type ViewType = 'analysis' | 'backtest' | 'settings' | 'hs300'
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type FontSize = 'small' | 'medium' | 'large'
 export type BacktestMode = 'breakout' | 'retrace'

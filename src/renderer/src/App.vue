@@ -9,7 +9,16 @@
         <SettingsView v-if="currentView === 'settings'" />
         <template v-else>
           <div class="center-panel" :style="{ width: centerPanelWidth + 'px' }">
+            <HS300Analysis
+              v-if="currentView === 'hs300'"
+              :stock-list="stockList"
+              :is-running="isRunning"
+              @update:width="handleCenterWidthUpdate"
+              @run="handleHS300Run"
+              @stop="handleStop"
+            />
             <StockListEditor
+              v-else
               :mode="currentView"
               :stock-list="stockList"
               :is-running="isRunning"
@@ -37,6 +46,7 @@ import LeftSidebar from './components/LeftSidebar.vue'
 import StockListEditor from './components/StockListEditor.vue'
 import LogPanel from './components/LogPanel.vue'
 import SettingsView from './components/Settings/SettingsView.vue'
+import HS300Analysis from './components/HS300Analysis.vue'
 import { useAppStore } from './stores/app'
 import { useStockStore } from './stores/stock'
 
@@ -49,9 +59,11 @@ const logs = ref<string[]>([])
 const isRunning = ref(false)
 
 const currentView = computed(() => appStore.currentView)
-const stockList = computed(() =>
-  currentView.value === 'analysis' ? stockStore.analysisList : stockStore.backtestList
-)
+const stockList = computed(() => {
+  if (currentView.value === 'analysis') return stockStore.analysisList
+  if (currentView.value === 'backtest') return stockStore.backtestList
+  return stockStore.hs300List
+})
 
 // 视图切换时加载对应的股票列表
 watch(currentView, async (newView) => {
@@ -69,7 +81,7 @@ const themeConfig = computed(() => ({
 }))
 
 // 视图切换
-function handleChangeView(view: 'analysis' | 'backtest' | 'settings') {
+function handleChangeView(view: 'analysis' | 'backtest' | 'settings' | 'hs300') {
   appStore.setCurrentView(view)
 }
 
@@ -194,6 +206,98 @@ async function handleStop() {
   await window.electronAPI.file.unwatchLog()
   isRunning.value = false
   message.info('任务已停止')
+}
+
+// 沪深300分析运行
+async function handleHS300Run() {
+  if (isRunning.value) {
+    message.warning('任务正在运行中，请稍候')
+    return
+  }
+
+  logs.value = []
+  isRunning.value = true
+
+  const logPath = 'logs/stock_300_analysis.log'
+
+  // 过滤 Python 日志前缀
+  function filterLog(line: string): string {
+    return line.replace(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} - \w+ - /, '')
+  }
+
+  // 过滤警告和提示信息
+  function isNoise(line: string): boolean {
+    const noisePatterns = [
+      'DeprecationWarning',
+      'FutureWarning',
+      'Pyarrow will become',
+      'to allow more performant',
+      'Arrow string type',
+      'better interoperability',
+      'was not found to be installed',
+      'If this would cause problems for you',
+      'please provide us feedback',
+      'import pandas as pd',
+      'pandas 3.0',
+      '.py:',
+      '/pandas/',
+      'github.com/pandas-dev/pandas'
+    ]
+    return noisePatterns.some(pattern => line.includes(pattern))
+  }
+
+  // 监听日志输出
+  const unsubOutput = window.electronAPI.python.onOutput((output) => {
+    const lines = output.data.split('\n').filter((l: string) => l.trim())
+    lines.forEach((line: string) => {
+      if (output.type === 'stderr' && !line.includes('Traceback') && !line.includes('Error:') && !line.includes('Exception:')) {
+        if (isNoise(line)) return
+        logs.value.push(filterLog(line))
+      } else if (output.type === 'stdout') {
+        logs.value.push(filterLog(line))
+      } else {
+        logs.value.push('[ERROR] ' + filterLog(line))
+      }
+    })
+    logPanelRef.value?.scrollToBottom()
+  })
+
+  // 监听日志文件
+  const unsubLog = window.electronAPI.python.onLog((log) => {
+    const lines = log.split('\n').filter((l: string) => l.trim())
+    lines.forEach((line: string) => {
+      if (isNoise(line)) return
+      logs.value.push(filterLog(line))
+    })
+    logPanelRef.value?.scrollToBottom()
+  })
+
+  // 监听进程退出
+  const unsubExit = window.electronAPI.python.onExit((data) => {
+    isRunning.value = false
+    unsubOutput()
+    unsubLog()
+    unsubExit()
+
+    if (data.code === 0) {
+      message.success('沪深300分析完成')
+    } else if (data.code !== null) {
+      message.error(`任务异常退出: ${data.error || `code ${data.code}`}`)
+    }
+
+    window.electronAPI.notification.show('沪深300分析完成', '请查看分析结果')
+  })
+
+  try {
+    await window.electronAPI.python.runHS300Analysis()
+    await window.electronAPI.file.watchLog(logPath)
+  } catch (err) {
+    isRunning.value = false
+    unsubOutput()
+    unsubLog()
+    unsubExit()
+    message.error(`启动失败: ${(err as Error).message}`)
+  }
 }
 
 // 中间面板宽度更新

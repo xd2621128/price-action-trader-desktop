@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, Notification } from 'electron'
 import { join } from 'path'
-import { spawn, ChildProcess } from 'child_process'
+import { spawn, exec, ChildProcess } from 'child_process'
 import * as fs from 'fs'
 import log from 'electron-log'
 import Store from 'electron-store'
@@ -29,6 +29,7 @@ const store = new Store({
 let mainWindow: BrowserWindow | null = null
 let pythonProcess: ChildProcess | null = null
 let logWatcher: chokidar.FSWatcher | null = null
+let stdoutBuffer = ''  // Buffer for incomplete stdout lines
 
 const PYTHON_PATH = 'D:/project/python/price_action_trader'
 
@@ -79,7 +80,7 @@ function createWindow() {
 // Python 进程管理
 function runPythonScript(script: string, args: string[] = []) {
   if (pythonProcess) {
-    pythonProcess.kill()
+    killPythonProcess()
     log.info('Previous Python process killed')
   }
 
@@ -96,6 +97,25 @@ function runPythonScript(script: string, args: string[] = []) {
     const text = data.toString('utf-8')
     mainWindow?.webContents.send('python:output', { type: 'stdout', data: text })
     log.info(`[Python stdout] ${text.trim()}`)
+
+    // Buffer incomplete lines and process complete ones
+    stdoutBuffer += text
+    const lines = stdoutBuffer.split('\n')
+    stdoutBuffer = lines.pop() || ''  // Keep incomplete line in buffer
+
+    for (const line of lines) {
+      // 检测通知标记并显示系统通知
+      if (line.startsWith('[NOTIFICATION]')) {
+        const parts = line.slice('[NOTIFICATION]'.length).trim().split(' | ')
+        if (parts.length >= 2) {
+          const title = parts[0]
+          const body = parts.slice(1).join(' | ')
+          if (Notification.isSupported()) {
+            new Notification({ title, body }).show()
+          }
+        }
+      }
+    }
   })
 
   pythonProcess.stderr?.on('data', (data: Buffer) => {
@@ -108,6 +128,7 @@ function runPythonScript(script: string, args: string[] = []) {
     mainWindow?.webContents.send('python:exit', { code })
     log.info(`Python process exited with code ${code}`)
     pythonProcess = null
+    isAnalysisRunning = false
   })
 
   pythonProcess.on('error', (err) => {
@@ -116,6 +137,29 @@ function runPythonScript(script: string, args: string[] = []) {
   })
 
   return true
+}
+
+// 终止 Python 进程（跨平台兼容）
+function killPythonProcess() {
+  if (!pythonProcess) return
+
+  try {
+    // 尝试正常终止
+    pythonProcess.kill('SIGTERM')
+  } catch (err) {
+    log.warn('Normal kill failed, trying forced kill:', err)
+    try {
+      // Windows 上强制终止
+      if (process.platform === 'win32') {
+        exec(`taskkill /F /PID ${pythonProcess.pid}`, () => {})
+      } else {
+        pythonProcess.kill('SIGKILL')
+      }
+    } catch (e) {
+      log.error('Failed to kill Python process:', e)
+    }
+  }
+  pythonProcess = null
 }
 
 // 解析 config.py 为 JSON 对象
@@ -453,27 +497,51 @@ function watchLogFile(filepath: string) {
   })
 }
 
+// 分析运行中的标记（技术分析和回测共用同一进程，所以统一管理）
+let isAnalysisRunning = false
+
 // IPC 处理器
 function setupIpcHandlers() {
-  // 运行技术分析
+  // 运行技术分析（单例模式：正在运行则拒绝）
   ipcMain.handle('python:run-analysis', () => {
+    if (isAnalysisRunning) {
+      log.warn('Analysis rejected: another analysis is already running')
+      return { success: false, error: 'already_running' }
+    }
+    isAnalysisRunning = true
     log.info('Starting technical analysis')
     return runPythonScript('main.py')
   })
 
-  // 运行回测（支持两种模式）
+  // 运行回测（单例模式：正在运行则拒绝）
   ipcMain.handle('python:run-backtest', (_, mode: 'breakout' | 'retrace' = 'breakout') => {
+    if (isAnalysisRunning) {
+      log.warn('Backtest rejected: another analysis is already running')
+      return { success: false, error: 'already_running' }
+    }
+    isAnalysisRunning = true
     log.info(`Starting backtest mode: ${mode}`)
     const script = mode === 'retrace' ? 'backtest_retrace.py' : 'backtest_main.py'
     return runPythonScript(script)
   })
 
+  // 运行沪深300分析（单例模式：正在运行则拒绝）
+  ipcMain.handle('python:run-hs300-analysis', () => {
+    if (isAnalysisRunning) {
+      log.warn('HS300 analysis rejected: another analysis is already running')
+      return { success: false, error: 'already_running' }
+    }
+    isAnalysisRunning = true
+    log.info('Starting HS300 analysis')
+    return runPythonScript('stock_300_analysis.py')
+  })
+
   // 停止 Python 进程
   ipcMain.handle('python:stop', () => {
     if (pythonProcess) {
-      pythonProcess.kill()
-      pythonProcess = null
+      killPythonProcess()
       log.info('Python process stopped by user')
+      isAnalysisRunning = false
       return true
     }
     return false
@@ -616,7 +684,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   // 清理 Python 进程
   if (pythonProcess) {
-    pythonProcess.kill()
+    killPythonProcess()
   }
   // 清理日志监听
   if (logWatcher) {

@@ -20,6 +20,16 @@
           <FundOutlined />
         </div>
       </a-tooltip>
+
+      <a-tooltip placement="right" :title="currentView === 'hs300' ? '沪深300分析 (当前)' : '点击切换到沪深300分析'">
+        <div
+          class="nav-item"
+          :class="{ active: currentView === 'hs300' }"
+          @click="handleClick('hs300')"
+        >
+          <BankOutlined />
+        </div>
+      </a-tooltip>
     </div>
 
     <div class="nav-bottom">
@@ -37,7 +47,7 @@
 </template>
 
 <script setup lang="ts">
-import { SlidersOutlined, FundOutlined, SettingOutlined } from '@ant-design/icons-vue'
+import { SlidersOutlined, FundOutlined, SettingOutlined, BankOutlined } from '@ant-design/icons-vue'
 import type { ViewType } from '../types'
 
 defineProps<{

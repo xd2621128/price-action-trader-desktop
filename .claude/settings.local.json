@@ -28,7 +28,16 @@
       "Bash(sed -i 's/^LOGS_DIR = .os.path.join\\(BASE_DIR, \"\"logs\"\"\\).$/LOGS_DIR = os.path.join\\(BASE_DIR, \"\"logs\"\"\\)/' config.py)",
       "Bash(sed -i 's/^STOCK_FILE_PATH = .os.path.join\\(DATA_DIR, \"\"stock_list.txt\"\"\\).$/STOCK_FILE_PATH = os.path.join\\(DATA_DIR, \"\"stock_list.txt\"\"\\)/' config.py)",
       "Bash(sed -i 's/^STOCK_BACKTEST_FILE_PATH = .os.path.join\\(DATA_DIR, \"\"stock_backtest_list.txt\"\"\\).$/STOCK_BACKTEST_FILE_PATH = os.path.join\\(DATA_DIR, \"\"stock_backtest_list.txt\"\"\\)/' config.py)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(ls -la D:/project/python/price_action_trader/*.py)",
+      "Bash(npx tsc:*)",
+      "Bash(powershell -WindowStyle Hidden -Command \"[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null; \\\\$template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent\\([Windows.UI.Notifications.ToastTemplateType]::ToastText02\\); \\\\$template.SelectSingleNode\\('//text[@id=''1'']'\\).AppendChild\\(\\\\$template.CreateTextNode\\('Test Title'\\)\\) | Out-Null; \\\\$template.SelectSingleNode\\('//text[@id=''2'']'\\).AppendChild\\(\\\\$template.CreateTextNode\\('Test Message'\\)\\) | Out-Null; [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier\\('PriceActionTrader'\\).Show\\(\\\\$template\\)\")",
+      "Bash(powershell -Command \"msg * /TIME:3 'Test notification from PowerShell'\")",
+      "Bash(powershell -Command \"Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show\\('Test Message', 'Test Title', 'OK', 'Information'\\)\")",
+      "Bash(npm run:*)",
+      "Read(//d/project/electron/price-action-trader-desktop/$LOCALAPPDATA/electron/**)",
+      "Read(//c/Users/xudi/AppData/Local/electron/Cache/**)",
+      "Bash(export ELECTRON_MIRROR=\"https://npmmirror.com/mirrors/electron/\")"
     ]
   }
 }
